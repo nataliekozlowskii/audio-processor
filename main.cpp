@@ -18,12 +18,35 @@ const int sample_rate = 44100;
 const int input_channels = 1;
 const int seconds = 15;
 
-typedef struct
-{
+struct UserData {
     SNDFILE* file;
     SF_INFO sfinfo;
+};
+
+// define equalization settings
+struct EQSettings {
+    float bass_gain   = 1.5f;  // boost bass
+    float mid_gain    = 1.0f;  // keep same
+    float treble_gain = 0.5f;  // cut treble
+};
+
+
+// audio equalization (adjust volume of different frequencies)
+void apply_eq(CArray& spectrum, double sampleRate, const EQSettings& eq) {
+    size_t N = spectrum.size();
+
+    for (size_t i = 0; i < N; i++) {
+        double freq = (i * sampleRate) / N;
+
+        if (freq < 250.0) {
+            spectrum[i] *= eq.bass_gain;
+        } else if (freq < 4000.0) {
+            spectrum[i] *= eq.mid_gain;
+        } else {
+            spectrum[i] *= eq.treble_gain;
+        }
+    }
 }
-UserData;
 
 // apply Hanning window to signal
 CArray hann_window(const float* input, 
@@ -45,7 +68,7 @@ CArray hann_window(const float* input,
     return windowed_signal;
 }
 
-// Cooley-Tukey FFT implementation
+// Cooley-Tukey FFT implementation (time -> frequency domain)
 void fft(CArray& signal){
     const size_t total_size = signal.size();
 
@@ -70,6 +93,22 @@ void fft(CArray& signal){
         Complex transformed = std::polar<double>(1.0, -2.0 * M_PI * i / total_size) * odd[i];
         signal[i] = even[i] + transformed;
         signal[i + total_size/2] = even[i] - transformed;
+    }
+}
+
+// inverse FFT implementation (frequency -> time domain)
+void inverse_fft(CArray& signal) {
+    // conjugate complex numbers
+    for (auto& x : signal) {
+        x = std::conj(x);
+    }
+
+    // forward FFT
+    fft(signal);
+
+    // conjugate again and scale by 1/N
+    for (auto& x : signal) {
+        x = std::conj(x) / static_cast<double>(signal.size());
     }
 }
 
@@ -136,10 +175,12 @@ int callback(const void *inputBuffer,
     (void) statusFlags;
 
     if (in != nullptr) {
+
+        // --- Audio Visualization ---
         // apply hann window
         CArray windowed_signal = hann_window(in, framesPerBuffer);
 
-        // run FFT
+        // FFT (time -> frequency domain)
         fft(windowed_signal);
 
         // get magnitudes
@@ -148,8 +189,22 @@ int callback(const void *inputBuffer,
         // visualize
         visualize_audio(magnitudes);
 
+        // --- Audio Processing ---
+        // apply audio equalization
+        EQSettings eq;
+        apply_eq(windowed_signal, user_data->sfinfo.samplerate, eq);
+
+        // inverse FFT (frequency -> time domain)
+        inverse_fft(windowed_signal);
+
+        // convert complex sample data into real array of floats
+        std::vector<float> eq_output(framesPerBuffer);
+        for (size_t i = 0; i < framesPerBuffer; i++) {
+            eq_output[i] = static_cast<float>(windowed_signal[i].real());
+        }
+
         // write frames to file
-        sf_writef_float(user_data->file, in, framesPerBuffer);
+        sf_writef_float(user_data->file, eq_output.data(), framesPerBuffer);
     }
     
     return paContinue;
