@@ -31,6 +31,69 @@ struct EQSettings {
 };
 
 
+// bit reversal
+int reverse_bits(int forward_int, int log2n) {
+    int reversed = 0;
+    for (int i = 0; i < log2n; i++) {
+        if ((forward_int >> i) & 1) {
+            reversed |= (1 << (log2n - 1 - i));
+        }
+    }
+    return reversed;
+}
+
+// Cooley-Tukey FFT implementation (time -> frequency domain)
+void fft(CArray& signal){
+    const size_t total_size = signal.size();
+
+    int log2n = 0;
+    while ((1 << log2n) < total_size) {
+        log2n++;
+    }
+
+    // bit reversal
+    for (int i = 0; i < total_size; i++) {
+        int reversed_i = reverse_bits(i, log2n);
+        if (i < reversed_i) {
+            std::swap(signal[i], signal[reversed_i]);
+        }
+    }
+
+    // iterative butterfly operations
+    for (int len = 2; len <= total_size; len <<= 1) {
+        double angle = -2 * M_PI / len;
+        std::complex<double> wlen(std::cos(angle), std::sin(angle));
+            
+        for (int i = 0; i < total_size; i += len) {
+            std::complex<double> twiddle_factor(1);
+            for (int j = 0; j < len / 2; ++j) {
+                std::complex<double> even_part = signal[i + j];
+                std::complex<double> odd_part_twiddled = (signal[i + j + len / 2] 
+                                                          * twiddle_factor);
+                signal[i + j] = even_part + odd_part_twiddled;
+                signal[i + j + len / 2] = even_part - odd_part_twiddled;
+                twiddle_factor *= wlen;
+            }
+        }
+    }
+}
+
+// inverse FFT implementation (frequency -> time domain)
+void inverse_fft(CArray& signal) {
+    // conjugate complex numbers
+    for (auto& x : signal) {
+        x = std::conj(x);
+    }
+
+    // forward FFT
+    fft(signal);
+
+    // conjugate again and scale by 1/N
+    for (auto& x : signal) {
+        x = std::conj(x) / static_cast<double>(signal.size());
+    }
+}
+
 // audio equalization (adjust volume of different frequencies)
 void apply_eq(CArray& spectrum, double sampleRate, const EQSettings& eq) {
     size_t N = spectrum.size();
@@ -66,50 +129,6 @@ CArray hann_window(const float* input,
     }
 
     return windowed_signal;
-}
-
-// Cooley-Tukey FFT implementation (time -> frequency domain)
-void fft(CArray& signal){
-    const size_t total_size = signal.size();
-
-    // recursion base case
-    if (total_size <= 1) {
-        return;
-    }
-
-    CArray even(total_size / 2), odd(total_size / 2);
-
-    // split into even and odd arrays
-    for(size_t i = 0; i < total_size / 2; i++){
-        even[i] = signal[i*2];
-        odd[i] = signal[i*2 + 1];
-    }
-
-    // recurse on both
-    fft(even);
-    fft(odd);
-
-    for (size_t i  = 0; i < total_size / 2; i++) {
-        Complex transformed = std::polar<double>(1.0, -2.0 * M_PI * i / total_size) * odd[i];
-        signal[i] = even[i] + transformed;
-        signal[i + total_size/2] = even[i] - transformed;
-    }
-}
-
-// inverse FFT implementation (frequency -> time domain)
-void inverse_fft(CArray& signal) {
-    // conjugate complex numbers
-    for (auto& x : signal) {
-        x = std::conj(x);
-    }
-
-    // forward FFT
-    fft(signal);
-
-    // conjugate again and scale by 1/N
-    for (auto& x : signal) {
-        x = std::conj(x) / static_cast<double>(signal.size());
-    }
 }
 
 // calculate the magnitudes of outputs in the frequency domain
