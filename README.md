@@ -1,6 +1,6 @@
 # audio-processor
 
-This C++ project records audio from your microphone, processes it in real time, applies equalization, visualizes frequency data in the terminal, and allows saving recordings to WAV files. It uses:
+This C++ project provides functionality to record audio, visualize recordings in real time, and process audio using techniques like equalization.
 
 - [PortAudio](http://www.portaudio.com/) for cross-platform audio input/output.
 - [libsndfile](https://github.com/libsndfile/libsndfile) for writing audio data to WAV files.
@@ -8,11 +8,11 @@ This C++ project records audio from your microphone, processes it in real time, 
 
 ## Audio Visualization
 
-The audio signal is transformed into the frequency domain using Hanning windowing and a Fast Fourier Transform (FFT). The resulting frequency components are displayed in the terminal as scaled horizontal bars.
+The audio signal is transformed into the frequency domain using Hanning windowing and a Fast Fourier Transform (FFT), and resulting frequency components are displayed in the terminal as scaled horizontal bars in your terminal.
 
 ## Audio Processing
 
-Equalization is performed in the frequency domain by adjusting the amplitudes of specific frequency bands. The modified signal is then reconstructed in the time domain using an inverse FFT.
+Equalization is performed in the frequency domain by adjusting the amplitudes of specific frequency bands, and the modified signal is reconstructed in the time domain using an inverse FFT. Equalization settings are specified in config.h.
 
 ## Dependencies
 Install dependencies via vcpkg:
@@ -24,13 +24,19 @@ vcpkg install libsndfile
 
 ## Build
 ```cmd
-mkdir build
-cd build
-cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=[insert-vcpkg-root]/buildsystems/vcpkg.cmake
+cmake -S . -B -DCMAKE_TOOLCHAIN_FILE=[insert-vcpkg-root]/buildsystems/vcpkg.cmake
 cmake --build .
 ```
 
 ## Run
+For recording and visualizing audio, run the record_and_visualize.exe executable
+
 ```cmd
-./audio-processor
+./audio-processor/build/Release/record_and_visualize.exe
+```
+
+For applying audio equalization, run the process_audio.exe executable.
+
+```cmd
+./audio-processor/build/Release/process_audio.exe
 ```
